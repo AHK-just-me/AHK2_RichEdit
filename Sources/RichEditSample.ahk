@@ -1,7 +1,7 @@
 ; ======================================================================================================================
 ; RichEdit Demo
 ; ======================================================================================================================
-#Include RichEdit.ahk
+#Include RichEdit_2.ahk
 #Include RichEditDlgs.ahk
 ; ======================================================================================================================
 SetWinDelay -1
@@ -751,12 +751,12 @@ ParaIndentGui(RE) {
           Success := False
    Metrics := RE.GetMeasurement()
    PF2 := RE.GetParaFormat()
-   Owner := RE.GuiHwnd
+   Owner := RE.Gui.Hwnd
    ParaIndentGui := Gui("+Owner" . Owner . " +ToolWindow +LastFound", "Paragraph Indentation")
    ParaIndentGui.OnEvent("Close", ParaIndentGuiClose)
    ParaIndentGui.MarginX := 20
    ParaIndentGui.MarginY := 10
-   ParaIndentGui.AddText("Section h20 0x200", "irst line left indent (absolute):")
+   ParaIndentGui.AddText("Section h20 0x200", "First line left indent (absolute):")
    ParaIndentGui.AddText("xs hp 0x200", "Other lines left indent (relative):")
    ParaIndentGui.AddText("xs hp 0x200", "All lines right indent (absolute):")
    EDLeft1 := ParaIndentGui.AddEdit("ys hp Limit5")
@@ -853,7 +853,7 @@ ParaNumberingGui(RE) {
           Success := False
    Metrics := RE.GetMeasurement()
    PF2 := RE.GetParaFormat()
-   Owner := RE.GuiHwnd
+   Owner := RE.Gui.Hwnd
    ParaNumberingGui := Gui("+Owner" . Owner . " +ToolWindow +LastFound", "Paragraph Numbering")
    ParaNumberingGui.OnEvent("Close", ParaNumberingGuiClose)
    ParaNumberingGui.MarginX := 20
@@ -875,7 +875,7 @@ ParaNumberingGui(RE) {
       Tab := RegExReplace(Tab, "\.", ",")
    EDDist.Text := Tab
    BN1 := ParaNumberingGui.AddButton("xs", "Apply") ; gParaNumberingGuiApply hwndhBtn1, Apply
-   BN2.OnEvent("Click", ParaNumberingGuiApply)
+   BN1.OnEvent("Click", ParaNumberingGuiApply)
    BN2 := ParaNumberingGui.AddButton("x+10 yp", "Cancel") ;  gParaNumberingGuiClose hwndhBtn2, Cancel
    BN2.OnEvent("Click", ParaNumberingGuiClose)
    BN2.GetPos( , , &BW := 0)
@@ -898,7 +898,7 @@ ParaNumberingGui(RE) {
       Type := DDLType.Value
       Style := DDLStyle.Value
       Start := EDStart.Text
-      Tab := EDDist.Txxt
+      Tab := EDDist.Text
       If !RegExMatch(Tab, "^\d{1,2}((\.|,)\d{1,2})?$") {
          EDDist.Text := ""
          EDDist.Focus()
@@ -919,7 +919,7 @@ ParaSpacingGui(RE) {
    Static Owner := "",
           Success := False
    PF2 := RE.GetParaFormat()
-   Owner := RE.GuiHwnd
+   Owner := RE.Gui.Hwnd
    ParaSpacingGui := Gui("+Owner" . Owner . " +ToolWindow +LastFound", "Paragraph Spacing") ; +LabelParaSpacingGui
    ParaSpacingGui.OnEvent("Close", ParaSpacingGuiClose)
    ParaSpacingGui.MarginX := 20
@@ -986,7 +986,7 @@ SetTabStopsGui(RE) {
    Tabs.Length := PF2.Tabs.Length
    For I, V In PF2.Tabs
       Tabs[I] := [Format("{:.2f}", Round(((V & 0x00FFFFFF) * Metrics) / 1440, 2)), V & 0xFF000000]
-   Owner := RE.GuiHwnd
+   Owner := RE.Gui.Hwnd
    SetTabStopsGui := Gui("+Owner" . Owner . " +ToolWindow +LastFound", "Set Tabstops")
    SetTabStopsGui.OnEvent("Close", SetTabStopsGuiClose)
    SetTabStopsGui.MarginX := 10
@@ -1006,6 +1006,7 @@ SetTabStopsGui(RE) {
    RBR := SetTabStopsGui.AddRadio("ys wp", "Right")
    RBD := SetTabStopsGui.AddRadio("wp", "Decimal")
    BNAdd := SetTabStopsGui.AddButton("xs Section w60 Disabled", "&Add")
+   BNAdd.OnEvent("Click", SetTabStopsGuiAdd)
    BNRem := SetTabStopsGui.AddButton("ys w60 Disabled", "&Remove")
    BNRem.OnEvent("Click", SetTabStopsGuiRemove)
    BNAdd.GetPos(&X1 := 0)
@@ -1033,7 +1034,7 @@ SetTabStopsGui(RE) {
    ; -------------------------------------------------------------------------------------------------------------------
    SetTabStopsGuiSelChanged(*) {
       If (TabCount < MAX_TAB_STOPS)
-         BNAdd.Enabled := !!RegExMatch(CBBTabs.Text, "^\s*$")
+         BNAdd.Enabled := !!RegExMatch(CBBTabs.Text, "^\d*[.,]?\d+$")
       If !(I := CBBTabs.Value) {
          BNRem.Enabled := False
          Return
@@ -1098,17 +1099,15 @@ SetTabStopsGui(RE) {
    }
    ; -------------------------------------------------------------------------------------------------------------------
    SetTabStopsGuiApply(*) {
-      TabCount := DllCall("SendMessage", "Ptr", CBBTabs.Hwnd, "UInt", 0x0146, "Ptr", 0, "Ptr", 0, "Int") ; CB_GETCOUNT
-      If (TabCount = -1)
+      TabCount := SendMessage(0x0146, 0, 0, CBBTabs.Hwnd) << 32 >> 32 ; CB_GETCOUNT
+      If (TabCount < 1)
          Return
-      If (TabCount > 0) {
-         TabArr := ControlGetItems(CBBTabs.HWND)
-         TabStops := {}
-         For I, T In TabArr {
-            Alignment := SendMessage(0x0150, I - 1, 0, CBBTabs.HWND) ; CB_GETITEMDATA
-            TabPos := Format("{:i}", T * 100)
-            TabStops.%TabPos% := Align.%Alignment%
-         }
+      TabArr := ControlGetItems(CBBTabs.HWND)
+      TabStops := {}
+      For I, T In TabArr {
+         Alignment := Format("0x{:08X}", SendMessage(0x0150, I - 1, 0, CBBTabs.HWND)) ; CB_GETITEMDATA
+         TabPos := Format("{:i}", T * 100)
+         TabStops.%TabPos% := Align.%Alignment%
       }
       Success := RE.SetTabStops(TabStops)
       RE.Gui.Opt("-Disabled")
