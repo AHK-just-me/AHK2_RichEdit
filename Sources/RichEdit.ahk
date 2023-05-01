@@ -95,7 +95,7 @@ Class RichEdit {
       If (MultiLine) {
          ; Adjust the formatting rectangle
          RC := This.GetRect()
-         This.SetRect(RC.L, RC.T + 2, RC.R, RC.B)
+         This.SetRect(RC.L + 6, RC.T + 2, RC.R, RC.B)
          ; Set advanced typographic options
          ; EM_SETTYPOGRAPHYOPTIONS = 0x04CA (WM_USER + 202)
          ; TO_ADVANCEDTYPOGRAPHY	= 1, TO_ADVANCEDLAYOUT = 8 ? not documented
@@ -713,7 +713,7 @@ Class RichEdit {
       If (CF2.Effects & 0x40000000)  ; CFE_AUTOCOLOR
          Font.Color := "Auto"
       Else
-         CF2.TextColor := This.GetBGR(Font.Color)
+         Font.Color := This.GetRGB(CF2.TextColor)
       If (CF2.Effects & 0x04000000) ; CFE_AUTOBACKCOLOR
          Font.BkColor := "Auto"
       Else
@@ -1600,7 +1600,7 @@ Class RichEdit {
             Tabs := Array()
             Tabs.Length := TabCount
             Loop TabCount
-               Tabs[A_Index] := NumGet(This, Addr += 4, "UInt")
+               Tabs[A_Index] := NumGet(Addr += 4, "UInt")
             Return Tabs
          }
          Set {
