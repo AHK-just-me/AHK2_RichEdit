@@ -249,7 +249,7 @@ MainGui.SetFont("s10", "Arial")
 Options := "xm y+5 w" . EditW . " r20"
 If !IsObject(RE2 := RichEdit(MainGui, Options))
    Throw("Could not create the RE2 RichEdit control!", -1)
-RE2.SetOptions(["SELECTIONBAR"])
+; RE2.SetOptions(["SELECTIONBAR"])
 RE2.AutoURL(True)
 RE2.SetEventMask(["SELCHANGE", "LINK"])
 RE2.OnNotify(0x0702, RE2_SelChange)
