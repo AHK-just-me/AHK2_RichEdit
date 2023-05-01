@@ -1,9 +1,11 @@
+#DllLoad "Comdlg32.dll"
 Class RichEditDlgs {
    Static Call(*) => False
    ; ===================================================================================================================
    ; ===================================================================================================================
    ; RICHEDIT COMMON DIALOGS ===========================================================================================
    ; ===================================================================================================================
+   Static FindReplMsg := DllCall("RegisterWindowMessage", "Str", "commdlg_FindReplace", "UInt") ; FINDMSGSTRING
    ; ===================================================================================================================
    ; Most of the following methods are based on DLG 5.01 by majkinetor
    ; http://www.autohotkey.com/board/topic/15836-module-dlg-501/
@@ -54,7 +56,10 @@ Class RichEditDlgs {
       ; CF_TTONLY = 0x40000, CF_FORCEFONTEXIST =0x10000, CF_SELECTSCRIPT = 0x400000
       ; CF_NOVERTFONTS =0x01000000
       Flags := 0x00002141 ; 0x01013940
-      Color := RE.GetBGR(Font.Color)
+      If (Font.Color = "Auto")
+         Color := DllCall("GetSysColor", "Int", 8, "UInt") ; COLOR_WINDOWTEXT = 8
+      Else
+         Color := RE.GetBGR(Font.Color)
       CF_Size := (A_PtrSize = 8 ? (A_PtrSize * 10) + (4 * 4) + A_PtrSize : (A_PtrSize * 14) + 4)
       CF := Buffer(CF_Size, 0)                           ; CHOOSEFONT structure
       NumPut("UInt", CF_Size, CF)                        ; lStructSize
@@ -161,16 +166,15 @@ Class RichEditDlgs {
    Static FindText(RE) { ; Find dialog box
    ; ===================================================================================================================
       ; RE : RichEdit object
-   	Static FINDMSGSTRING := "commdlg_FindReplace",
-   	       FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2,
-   	       Buf := "", FR := "", Len := 256,
-             FR_Size := A_PtrSize * 10
+   	Static FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2,
+   	       Buf := "", BufLen := 256, FR := "", FR_Size := A_PtrSize * 10
       Text := RE.GetSelText()
+      Buf := ""
+      VarSetStrCapacity(&Buf, BufLen)
+      If (Text != "") && !RegExMatch(Text, "\W")
+         Buf := Text
       FR := Buffer(FR_Size, 0)
    	NumPut("UInt", FR_Size, FR)
-      VarSetStrCapacity(&Buf, Len)
-      If (Text && !RegExMatch(Text, "\W"))
-         Buf := Text
       Offset := A_PtrSize
    	NumPut("UPtr", RE.Gui.Hwnd, FR, Offset)  ; hwndOwner
       OffSet += A_PtrSize * 2
@@ -178,9 +182,9 @@ Class RichEditDlgs {
       OffSet += A_PtrSize
    	NumPut("UPtr", StrPtr(Buf), FR, Offset)  ; lpstrFindWhat
       OffSet += A_PtrSize * 2
-   	NumPut("Short", Len,	FR, Offset)         ; wFindWhatLen
+   	NumPut("Short", BufLen,	FR, Offset)      ; wFindWhatLen
       This.FindTextProc("Init", RE.HWND, "")
-   	OnMessage(DllCall("RegisterWindowMessage", "Str", FINDMSGSTRING), RichEditDlgs.FindTextProc)
+   	OnMessage(RichEditDlgs.FindReplMsg, RichEditDlgs.FindTextProc)
    	Return DllCall("Comdlg32.dll\FindTextW", "Ptr", FR.Ptr, "UPtr")
    }
    ; -------------------------------------------------------------------------------------------------------------------
@@ -188,8 +192,7 @@ Class RichEditDlgs {
       ; Find dialog callback procedure
       ; EM_FINDTEXTEXW = 0x047C, EM_EXGETSEL = 0x0434, EM_EXSETSEL = 0x0437, EM_SCROLLCARET = 0x00B7
       ; FR_DOWN = 1, FR_WHOLEWORD = 2, FR_MATCHCASE = 4,
-   	Static FINDMSGSTRING := "commdlg_FindReplace",
-   	       FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2 , FR_FINDNEXT := 0x8, FR_DIALOGTERM := 0x40,
+   	Static FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2 , FR_FINDNEXT := 0x8, FR_DIALOGTERM := 0x40,
              HWND := 0
       If (L = "Init") {
          HWND := M
@@ -197,7 +200,7 @@ Class RichEditDlgs {
       }
       Flags := NumGet(L, A_PtrSize * 3, "UInt")
       If (Flags & FR_DIALOGTERM) {
-         OnMessage(DllCall("RegisterWindowMessage", "Str", FINDMSGSTRING), RichEditDlgs.FindTextProc, 0)
+         OnMessage(RichEditDlgs.FindReplMsg, RichEditDlgs.FindTextProc, 0)
          If (RE := GuiCtrlFromHwnd(HWND))
             RE.Focus()
          HWND := 0
@@ -208,15 +211,14 @@ Class RichEditDlgs {
       Min := (Flags & FR_DOWN) ? NumGet(CR, 4, "Int") : NumGet(CR, 0, "Int")
       Max := (Flags & FR_DOWN) ? -1 : 0
       OffSet := A_PtrSize * 4
-      Find := NumGet(L, Offset, "UPtr")
+      Find := StrGet(NumGet(L, Offset, "UPtr"))
       FTX := Buffer(16 + A_PtrSize, 0)
-      NumPut("Int", Min, "Int", Max, "Ptr", Find, FTX)
+      NumPut("Int", Min, "Int", Max, "UPtr", StrPtr(Find), FTX)
       SendMessage(0x047C, Flags, FTX.Ptr, HWND)
       S := NumGet(FTX, 8 + A_PtrSize, "Int"), E := NumGet(FTX, 12 + A_PtrSize, "Int")
       If (S = -1) && (E = -1)
-         MsgBox(262208, "Find", "No (further) occurence found!")
+         MsgBox("No (further) occurence found!", "Find", 262208)
       Else {
-         Min := (Flags & FR_DOWN) ? E : S
          SendMessage(0x0437, 0, FTX.Ptr + 8 + A_PtrSize, HWND)
          SendMessage(0x00B7, 0, 0, HWND)
       }
@@ -284,29 +286,28 @@ Class RichEditDlgs {
    Static ReplaceText(RE) { ; Replace dialog box
    ; ===================================================================================================================
       ; RE : RichEdit object
-   	Static FINDMSGSTRING := "commdlg_FindReplace",
-   	       FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2,
-   	       FBuf := "", RBuf := "", FR := "", Len := 256,
-             FR_Size := A_PtrSize * 10
+   	Static FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2,
+   	       FBuf := "", RBuf := "", BufLen := 256, FR := "", FR_Size := A_PtrSize * 10
       Text := RE.GetSelText()
-      VarSetStrCapacity(&FBuf, Len)
-      VarSetStrCapacity(&RBuf, Len)
+      FBuf := RBuf := ""
+      VarSetStrCapacity(&FBuf, BufLen)
+      If (Text != "") && !RegExMatch(Text, "\W")
+         FBuf := Text
+      VarSetStrCapacity(&RBuf, BufLen)
       FR := Buffer(FR_Size, 0)
    	NumPut("UInt", FR_Size, FR)
-      If (Text && !RegExMatch(Text, "\W"))
-         FBuf := Text
       Offset := A_PtrSize
-   	NumPut("UPtr", RE.Gui.Hwnd, FR, Offset)        ; hwndOwner
+   	NumPut("UPtr", RE.Gui.Hwnd, FR, Offset)              ; hwndOwner
       OffSet += A_PtrSize * 2
-   	NumPut("UInt", FR_DOWN, FR, Offset)	           ; Flags
+   	NumPut("UInt", FR_DOWN, FR, Offset)	                 ; Flags
       OffSet += A_PtrSize
-   	NumPut("UPtr", StrPtr(FBuf), FR, Offset)       ; lpstrFindWhat
+   	NumPut("UPtr", StrPtr(FBuf), FR, Offset)             ; lpstrFindWhat
       OffSet += A_PtrSize
-   	NumPut("UPtr", StrPtr(RBuf), FR, Offset)       ; lpstrReplaceWith
+   	NumPut("UPtr", StrPtr(RBuf), FR, Offset)             ; lpstrReplaceWith
       OffSet += A_PtrSize
-   	NumPut("Short", Len,	"Short", Len, FR, Offset) ; wFindWhatLen, wReplaceWithLen
+   	NumPut("Short", BufLen,	"Short", BufLen, FR, Offset) ; wFindWhatLen, wReplaceWithLen
       This.ReplaceTextProc("Init", RE.HWND, "")
-   	OnMessage(DllCall("User32.dll\RegisterWindowMessage", "Str", FINDMSGSTRING), RichEditDlgs.ReplaceTextProc)
+   	OnMessage(RichEditDlgs.FindReplMsg, RichEditDlgs.ReplaceTextProc)
    	Return DllCall("Comdlg32.dll\ReplaceText", "Ptr", FR.Ptr, "UPtr")
    }
    ; -------------------------------------------------------------------------------------------------------------------
@@ -315,8 +316,7 @@ Class RichEditDlgs {
       ; EM_FINDTEXTEXW = 0x047C, EM_EXGETSEL = 0x0434, EM_EXSETSEL = 0x0437
       ; EM_REPLACESEL = 0xC2, EM_SCROLLCARET = 0x00B7
       ; FR_DOWN = 1, FR_WHOLEWORD = 2, FR_MATCHCASE = 4,
-   	Static FINDMSGSTRING := "commdlg_FindReplace",
-   	       FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2, FR_FINDNEXT := 0x8,
+   	Static FR_DOWN := 1, FR_MATCHCASE := 4, FR_WHOLEWORD := 2, FR_FINDNEXT := 0x8,
              FR_REPLACE := 0x10, FR_REPLACEALL := 0x20, FR_DIALOGTERM := 0x40,
              HWND := 0, Min := "", Max := "", FS := "", FE := "",
              OffFind := A_PtrSize * 4, OffRepl := A_PtrSize * 5
@@ -326,7 +326,7 @@ Class RichEditDlgs {
       }
       Flags := NumGet(L, A_PtrSize * 3, "UInt")
       If (Flags & FR_DIALOGTERM) {
-         OnMessage(DllCall("User32.dll\RegisterWindowMessage", "Str", FINDMSGSTRING), RichEditDlgs.ReplaceTextProc, 0)
+         OnMessage(RichEditDlgs.FindReplMsg, RichEditDlgs.ReplaceTextProc, 0)
          If (RE := GuiCtrlFromHwnd(HWND))
             RE.Focus()
          HWND := 0
@@ -351,7 +351,7 @@ Class RichEditDlgs {
          SendMessage(0x047C, Flags, FTX.Ptr, HWND)
          S := NumGet(FTX, 8 + A_PtrSize, "Int"), E := NumGet(FTX, 12 + A_PtrSize, "Int")
          If (S = -1) && (E = -1)
-            MsgBox(262208, "Replace", "No (further) occurence found!")
+            MsgBox("No (further) occurence found!", "Replace", 262208)
          Else {
             SendMessage(0x0437, 0, FTX.Ptr + 8 + A_PtrSize, HWND)
             SendMessage(0x00B7, 0, 0, HWND)
