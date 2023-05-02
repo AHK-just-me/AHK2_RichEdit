@@ -370,7 +370,7 @@ Class RichEdit {
    GetTextLen() { ; Calculates text length in various ways
       ; EM_GETTEXTLENGTHEX = 0x045F
       GTL := Buffer(8, 0)     ; GETTEXTLENGTHEX structure
-      NumPut( "UInt", 1200, GTL)  ; codepage = Unicode
+      NumPut( "UInt", 1200, GTL, 4)  ; codepage = Unicode
       Return SendMessage(0x045F, GTL.Ptr, 0, This.HWND)
    }
    ; -------------------------------------------------------------------------------------------------------------------
@@ -1271,7 +1271,7 @@ Class RichEdit {
       ; Define/Populate the PRINTDLG structure
       PD := Buffer(PD_Size, 0)
       Numput("UInt", PD_Size, PD)  ; lStructSize
-      Numput("UPtr", This.GuiHwnd, PD, A_PtrSize) ; hwndOwner
+      Numput("UPtr", This.Gui.Hwnd, PD, A_PtrSize) ; hwndOwner
       ; Collect Start/End select positions
       Sel := This.GetSel()
       ; Determine/Set Flags
@@ -1283,7 +1283,7 @@ Class RichEdit {
          Flags |= PD_SELECTION
       Offset := A_PtrSize * 5
       ; Flags, pages, and copies
-      NumPut("UInt", Flags, "USchort", 1, "UShort", 1, "UShort", 1, "UShort", -1, "UShort", 1, PD, Offset)
+      NumPut("UInt", Flags, "UShort", 1, "UShort", 1, "UShort", 1, "UShort", -1, "UShort", 1, PD, Offset)
       ; Note: Use -1 to specify the maximum page number (65535).
       ; Programming note: The values that are loaded to these fields are critical. The Print dialog will not
       ; display (returns an error) if unexpected values are loaded to one or more of these fields.
@@ -1353,7 +1353,7 @@ Class RichEdit {
       Else
          PrintS := 0, PrintE := -1            ; (-1 = Select All)
       Offset += 16
-      Numput("Int", PrintS, "Int", PrintE, FR) ; cr.cpMin , cr.cpMax
+      Numput("Int", PrintS, "Int", PrintE, FR, OffSet) ; cr.cpMin , cr.cpMax
       ; Define/Populate the DOCINFO structure
       DI := Buffer(A_PtrSize * 5, 0)
       NumPut("UPtr", A_PtrSize * 5, "UPtr", StrPtr(DocName), "UPtr", 0, DI) ; lpszDocName, lpszOutput
@@ -1401,7 +1401,7 @@ Class RichEdit {
          }
          ; Update FR for the next page
          Offset := (A_PtrSize * 2) + (4 * 8)
-         Numput("Int", PrintC, "Int", PrintE, FR) ; cr.cpMin, cr.cpMax
+         Numput("Int", PrintC, "Int", PrintE, FR, Offset) ; cr.cpMin, cr.cpMax
       }
       ; ----------------------------------------------------------------------------------------------------------------
       ; End the print job
